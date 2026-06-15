@@ -1,0 +1,2 @@
+This is a sample file for the advisor-executor PoC.
+It demonstrates that the executor can read files via the read_file tool.

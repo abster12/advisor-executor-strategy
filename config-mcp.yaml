@@ -1,0 +1,19 @@
+models:
+  advisor:
+    provider: mock
+    model: advisor-mock
+    temperature: 0.3
+  executor:
+    provider: mock
+    model: executor-mock
+    temperature: 0.1
+
+mcp_servers:
+  time:
+    command: uvx
+    args: ["mcp-server-time"]
+
+approval:
+  mode: smart
+  auto_approve: [read_file, list_directory, mcp_time_get_current_time]
+  prompt_on: [run_command]

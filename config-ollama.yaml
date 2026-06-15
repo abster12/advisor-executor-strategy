@@ -1,0 +1,16 @@
+models:
+  advisor:
+    provider: openai
+    model: gemma4:e4b
+    base_url: http://localhost:11434/v1
+    temperature: 0.3
+  executor:
+    provider: openai
+    model: gemma4:e4b
+    base_url: http://localhost:11434/v1
+    temperature: 0.1
+
+approval:
+  mode: smart
+  auto_approve: [read_file, list_directory]
+  prompt_on: [run_command]

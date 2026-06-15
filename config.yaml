@@ -1,0 +1,37 @@
+# Example configuration for advisor-executor-poc.
+# Copy to ~/.config/aepoc/config.yaml or pass via --config.
+
+models:
+  advisor:
+    provider: mock
+    model: advisor-mock
+    temperature: 0.3
+  executor:
+    provider: mock
+    model: executor-mock
+    temperature: 0.1
+
+# Uncomment to use real providers (requires env vars / API keys):
+# models:
+#   advisor:
+#     provider: anthropic
+#     model: claude-sonnet-4-20250514
+#     reasoning_effort: high
+#   executor:
+#     provider: openai
+#     model: gpt-4o
+
+# MCP servers enable tool-agnostic tool calling.
+# Requires `pip install -e '.[mcp]'` and Node.js for npx-based servers.
+mcp_servers:
+  # filesystem:
+  #   command: npx
+  #   args: ["-y", "@modelcontextprotocol/server-filesystem", "/Users/anandprakash/Desktop/dev"]
+  # time:
+  #   command: uvx
+  #   args: ["mcp-server-time"]
+
+approval:
+  mode: smart
+  auto_approve: [read_file, list_directory]
+  prompt_on: [run_command]
