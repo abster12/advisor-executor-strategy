@@ -1,6 +1,8 @@
-# Advisor/Executor PoC
+# Advisor/Executor Strategy
 
 A minimal, runnable proof-of-concept for a **model-agnostic**, **tool-agnostic** coding agent with separate advisor and executor roles.
+
+📖 **Read the architecture guide**: [abster12.github.io/advisor-executor-strategy](https://abster12.github.io/advisor-executor-strategy)
 
 ## What it demonstrates
 
@@ -12,7 +14,7 @@ A minimal, runnable proof-of-concept for a **model-agnostic**, **tool-agnostic**
 ## Install
 
 ```bash
-cd /Users/anandprakash/Desktop/dev/research/advisor-executor-poc
+cd advisor-executor-strategy
 uv pip install -e ".[all]"
 # or: pip install -e ".[all]"
 ```
@@ -105,7 +107,7 @@ Add to `.vscode/mcp.json`:
   "servers": {
     "advisor-executor-poc": {
       "command": "python",
-      "args": ["-m", "advisor_executor_poc", "--stdio", "--config", "/Users/anandprakash/Desktop/dev/research/advisor-executor-poc/config.yaml"]
+      "args": ["-m", "advisor_executor_poc", "--stdio", "--config", "config.yaml"]
     }
   }
 }
@@ -120,7 +122,7 @@ Add to the host's MCP server config:
   "mcpServers": {
     "advisor-executor-poc": {
       "command": "python",
-      "args": ["-m", "advisor_executor_poc", "--stdio", "--config", "/Users/anandprakash/Desktop/dev/research/advisor-executor-poc/config.yaml"]
+      "args": ["-m", "advisor_executor_poc", "--stdio", "--config", "config.yaml"]
     }
   }
 }
@@ -134,7 +136,7 @@ Add to `~/.hermes/config.yaml`:
 mcp_servers:
   aepoc:
     command: "python"
-    args: ["-m", "advisor_executor_poc", "--stdio", "--config", "/Users/anandprakash/Desktop/dev/research/advisor-executor-poc/config.yaml"]
+    args: ["-m", "advisor_executor_poc", "--stdio", "--config", "config.yaml"]
 ```
 
 ## Project layout
