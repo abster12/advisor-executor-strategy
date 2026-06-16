@@ -40,7 +40,8 @@
 
     <main class="container">
         <section class="intro">
-            <p class="lead">Most AI coding agents are monoliths: one model decides, calls tools, and executes. That couples your roadmap to a single provider's quirks, pricing, and capabilities. The advisor/executor pattern splits the brain from the hands so you can mix, match, and migrate models independently.</p>
+            <p class="lead">Most AI coding agents today are built as monoliths: a single model decides what to do, calls tools, and interprets the results. That design is simple to start with, but it quietly couples your product roadmap to one provider's API quirks, pricing changes, and capability gaps. When that provider releases a better model, raises prices, or changes a tool-calling schema, you are forced to rewrite agent logic rather than just swap a model name.</p>
+            <p class="lead">The advisor/executor pattern is a different bet. It separates the brain that reasons from the hands that act. The advisor produces a structured plan; the executor runs each step against tools. Because each role is served by an independent model configuration, you can mix, match, and migrate models without touching the orchestration logic. This article walks through the architecture, the trade-offs, and a working open-source kernel you can run today.</p>
             <div class="meta">
                 <span><i class="fas fa-user"></i> Abhigyan</span>
                 <span><i class="fas fa-calendar"></i> June 2026</span>
@@ -50,7 +51,7 @@
 
         <section id="architecture" class="section">
             <h2>The Architecture</h2>
-            <p>The kernel has three layers. Each layer talks through a stable contract, not a vendor SDK.</p>
+            <p>At the center of the design is a small kernel with three layers. Every layer communicates through a stable contract instead of a vendor SDK, which is what makes the whole system portable. The first layer is the advisor, a reasoning model that reads the user request, relevant context, and the list of available tools, then emits a plan as an ordered list of steps. The advisor does not call tools; it only decides what should happen and why. This constraint makes the plan auditable and gives you a single artifact to log, replay, or approve before any side effects occur.</p>
 
             <div class="architecture-cards">
                 <div class="arch-card">
@@ -63,37 +64,42 @@ step: {id, action, reasoning, expected_outcome}</div>
                 <div class="arch-card">
                     <div class="arch-number">2</div>
                     <h3>Model Router</h3>
-                    <p>Normalizes every provider to a single OpenAI-style chat-completion interface. Adapters translate Anthropic, OpenAI, Ollama, Gemini, Bedrock, etc. into one shape.</p>
+                    <p>Normalizes every provider to a single OpenAI-style chat-completion interface. Adapters translate Anthropic, OpenAI, Ollama, Gemini, Bedrock, and others into one shape.</p>
                     <div class="code-block">chat(messages, tools, model_config) -> response</div>
                 </div>
                 <div class="arch-card">
                     <div class="arch-number">3</div>
                     <h3>Executor + Tool Registry</h3>
-                    <p>Runs each plan step against tools. Built-in tools and MCP servers register the same way, so the agent is IDE/CLI agnostic.</p>
+                    <p>Runs each plan step against tools. Built-in tools and MCP servers register the same way, so the agent is IDE and CLI agnostic.</p>
                     <div class="code-block">call(tool_name, arguments) -> result</div>
                 </div>
             </div>
 
-            <p>The loop is simple: <strong>user request → advisor plans → executor runs → advisor replans on error → done.</strong> Because advisor and executor are independent model configs, you can run a cheap local model for execution and a strong cloud model for planning, or vice versa.</p>
+            <p>The second layer is the model router. Its job is to hide provider differences behind one OpenAI-style chat-completion interface. Adapters for Anthropic, OpenAI, Ollama, Gemini, Bedrock, and others all translate into the same message, tool-schema, and response shapes. The kernel never learns provider details; it only sees models with names, providers, and API keys. The third layer is the executor paired with a tool registry. The executor takes each step from the plan, resolves the right tool, and invokes it. Built-in tools and MCP servers register through the same path, so adding a new capability is a config change, not a code change.</p>
+            <p>The runtime loop is straightforward: a user request goes to the advisor, the advisor returns a plan, the executor iterates through the steps, and if a step fails the advisor is called again to replan. Because advisor and executor are independent model configs, you can pair a cheap local model for deterministic execution with a frontier cloud model for high-value planning, or swap either one as soon as a better option appears.</p>
         </section>
 
         <section id="advantages" class="section">
             <h2>Advantages</h2>
+            <p>Splitting planning from execution pays off in several ways. The most immediate is model portability. Changing the advisor from Claude to GPT-4o to a local Qwen is a one-line config edit, because the kernel only consumes the normalized chat interface. The same applies to the executor. This makes it easy to run experiments, respond to price changes, and avoid betting your entire agent on a single provider's roadmap.</p>
+            <p>Tool portability is equally important. By using the Model Context Protocol as the tool layer, any MCP server, whether it exposes a filesystem, a GitHub client, a database, or an internal company service, registers automatically under a predictable namespace. You do not need per-tool SDK glue or custom plugins for every editor. That same mechanism also makes the agent host-agnostic: expose the kernel itself as an MCP server over stdio, and VS Code, Cursor, Claude Desktop, Zed, Claude Code, and Hermes can all consume it without any editor-specific code.</p>
+            <p>The separation also improves economics and observability. You can assign a small, fast model to deterministic execution calls and reserve the most capable model for planning. Every plan is a structured object, so you can log, replay, audit, and insert human approval before execution. A mock adapter lets CI and new contributors run the full loop without cloud credentials, which keeps the feedback loop fast and cheap during development.</p>
+
             <div class="advantage-grid">
                 <div class="advantage">
                     <i class="fas fa-exchange-alt"></i>
                     <h3>Swap models without rewriting logic</h3>
-                    <p>Change one YAML key to move the advisor from Claude to GPT-4o to a local Qwen. The kernel never learns provider details.</p>
+                    <p>Change one YAML key to move the advisor or executor between Claude, GPT-4o, Ollama, or any future provider.</p>
                 </div>
                 <div class="advantage">
                     <i class="fas fa-puzzle-piece"></i>
                     <h3>Tool-agnostic via MCP</h3>
-                    <p>Any MCP server — filesystem, GitHub, time, databases, custom company tools — registers automatically. No per-tool SDK glue.</p>
+                    <p>Any MCP server registers automatically. No per-tool SDK glue and no custom IDE plugins.</p>
                 </div>
                 <div class="advantage">
                     <i class="fas fa-wallet"></i>
                     <h3>Cost control by role</h3>
-                    <p>Use a small/cheap model for deterministic execution calls and a frontier model only for high-value planning.</p>
+                    <p>Use a small, cheap model for deterministic execution and a frontier model only for high-value planning.</p>
                 </div>
                 <div class="advantage">
                     <i class="fas fa-shield-alt"></i>
@@ -103,18 +109,21 @@ step: {id, action, reasoning, expected_outcome}</div>
                 <div class="advantage">
                     <i class="fas fa-laptop-code"></i>
                     <h3>Works in any editor</h3>
-                    <p>Expose the kernel as an MCP server over stdio. VS Code, Cursor, Claude Desktop, Zed, Claude Code, and Hermes can all consume it.</p>
+                    <p>Expose the kernel as an MCP server over stdio and every supporting host can discover it.</p>
                 </div>
                 <div class="advantage">
                     <i class="fas fa-microscope"></i>
                     <h3>Observable by design</h3>
-                    <p>Plans are structured objects. You can log, replay, audit, and human-in-the-loop approve before execution.</p>
+                    <p>Plans are structured objects. Log, replay, audit, and require human approval before execution.</p>
                 </div>
             </div>
         </section>
 
         <section id="costs" class="section">
             <h2>Costs & Trade-offs</h2>
+            <p>No architecture is free. The advisor/executor split adds complexity because you now have two model calls and a small orchestrator instead of a single chat completion. The key is to keep the loop simple and reuse the model router everywhere so the extra surface area does not explode. Latency is another real cost: the executor must wait for the advisor to finish planning before it can start work. You can mitigate this by streaming the plan, caching tool schemas, and allowing partial execution of early steps while later steps are still being generated.</p>
+            <p>Maintenance also shifts. Provider APIs change, and adapters need occasional updates. You can reduce this burden by keeping the adapter surface small and using LiteLLM or OpenRouter as a fallback when a native adapter is missing. Debugging becomes two-dimensional: a failure can come from a bad plan or from a correctly planned step that failed during execution. The fix is to log the full plan plus every tool call, result, retry, and error, and to design the executor so you can replay from any step. Finally, there is a standardization tax. Not every model supports tool calling in the same way, so the kernel normalizes everything to JSON schema and structured output adapters. That is a one-time investment that pays back every time you add a new provider.</p>
+
             <div class="cost-table">
                 <div class="cost-row cost-header">
                     <span>Category</span>
@@ -123,34 +132,35 @@ step: {id, action, reasoning, expected_outcome}</div>
                 </div>
                 <div class="cost-row">
                     <span>Complexity</span>
-                    <span>Two model calls + orchestration instead of one.</span>
-                    <span>Keep the loop simple; reuse the model router everywhere.</span>
+                    <span>Two model calls plus orchestration instead of one.</span>
+                    <span>Keep the loop simple and reuse the model router everywhere.</span>
                 </div>
                 <div class="cost-row">
                     <span>Latency</span>
                     <span>Advisor planning adds a serial round-trip.</span>
-                    <span>Stream the plan, cache tool schemas, allow partial execution.</span>
+                    <span>Stream the plan, cache tool schemas, and allow partial execution.</span>
                 </div>
                 <div class="cost-row">
                     <span>Maintenance</span>
                     <span>Provider adapters drift as APIs change.</span>
-                    <span>Use LiteLLM/OpenRouter as a fallback; keep adapter surface small.</span>
+                    <span>Use LiteLLM or OpenRouter as a fallback and keep adapters small.</span>
                 </div>
                 <div class="cost-row">
                     <span>Debugging</span>
-                    <span>Failures can be in the plan or the execution.</span>
-                    <span>Log full plan + per-step I/O; replay from any step.</span>
+                    <span>Failures can sit in the plan or in execution.</span>
+                    <span>Log plan, per-step I/O, and replays from any step.</span>
                 </div>
                 <div class="cost-row">
                     <span>Standardization tax</span>
-                    <span>Not all models support the same tool-calling format.</span>
-                    <span>Normalize to JSON schema; use structured-output adapters.</span>
+                    <span>Models vary in tool-calling support.</span>
+                    <span>Normalize to JSON schema with structured-output adapters.</span>
                 </div>
             </div>
         </section>
 
         <section id="howto" class="section">
             <h2>How-To</h2>
+            <p>The accompanying repository is a minimal, runnable implementation of the pattern. It is designed so you can verify the loop without API keys, then gradually connect real models and tools. Start by cloning the repo and installing the package with uv. The base dependencies are enough for mock mode, which uses deterministic canned plans to exercise the orchestration and built-in tools.</p>
 
             <h3>1. Run the PoC in mock mode</h3>
             <div class="code-block"><span class="comment"># clone</span>
@@ -163,19 +173,20 @@ uv pip install -e .
 
 <span class="comment"># run with no API keys</span>
 python -m advisor_executor_poc "Read a file and run a shell command" --config config.yaml</div>
+            <p>In mock mode the advisor emits a fixed plan and the executor calls real built-in tools, so you can confirm the loop works without any cloud credentials.</p>
 
             <h3>2. Use a local model</h3>
-            <p>Start Ollama with any OpenAI-compatible model, then run:</p>
+            <p>Once the loop is working, point it at a local Ollama instance running any OpenAI-compatible model. This requires no API key and lets you test real model reasoning on your own hardware.</p>
             <div class="code-block">python -m advisor_executor_poc "List files in the current directory" --config config-ollama.yaml</div>
 
             <h3>3. Add MCP tools</h3>
-            <p>The included <code>config-mcp.yaml</code> registers the time MCP server. Any stdio MCP server works the same way.</p>
+            <p>The included <code>config-mcp.yaml</code> registers the time MCP server. Any stdio MCP server works the same way; the kernel discovers its tools and registers them under a predictable <code>mcp_{server}_{tool}</code> namespace.</p>
             <div class="code-block">python -m advisor_executor_poc "What time is it?" --config config-mcp.yaml</div>
 
             <h3>4. Plug into an IDE</h3>
-            <p>Run the kernel as an MCP server and point your editor at it.</p>
+            <p>The kernel can expose itself as an MCP server, which means any editor that speaks MCP can use it without a custom plugin. Start the stdio server and point your editor at it.</p>
             <div class="code-block">python -m advisor_executor_poc --stdio --config config.yaml</div>
-            <p>Example VS Code <code>.vscode/mcp.json</code>:</p>
+            <p>For VS Code, add this to <code>.vscode/mcp.json</code>:</p>
             <div class="code-block">{
   "servers": {
     "advisor-executor": {
@@ -187,7 +198,7 @@ python -m advisor_executor_poc "Read a file and run a shell command" --config co
 }</div>
 
             <h3>5. Configure your own models</h3>
-            <p>Edit <code>config.yaml</code>. Advisor and executor are independent.</p>
+            <p>Edit <code>config.yaml</code> to mix providers. The advisor and executor entries are completely independent, so you can pair an OpenAI planner with an Anthropic executor, a local Ollama executor with a cloud advisor, or any other combination that fits your cost and quality targets.</p>
             <div class="code-block">models:
   advisor:
     provider: openai
@@ -201,6 +212,9 @@ python -m advisor_executor_poc "Read a file and run a shell command" --config co
 
         <section id="dos" class="section">
             <h2>Do's & Don'ts</h2>
+            <p>After building and testing this pattern, a few guidelines stand out. First, treat the internal interface as a contract. Pick one chat schema and force every adapter to it, even when a native SDK offers something different. Second, keep the advisor honest: it should produce structured plans, not free-text instructions, because structured plans are easier to validate, log, and replay. Third, mock the loop early. Running the agent without API keys during development saves money and surfaces orchestration bugs before they reach real models.</p>
+            <p>On the flip side, do not let the advisor execute tools directly. That collapses the separation and reintroduces the coupling this pattern is meant to avoid. Do not hard-code provider SDKs in the kernel; they belong only in adapters. And do not build a custom IDE plugin as a first step. MCP gives you every major editor and CLI host for free, so start there and only add custom plugins when you need deep UI integration.</p>
+
             <div class="dosdonts">
                 <div class="dos">
                     <h3><i class="fas fa-check-circle"></i> Do</h3>
@@ -229,7 +243,7 @@ python -m advisor_executor_poc "Read a file and run a shell command" --config co
 
         <section class="cta">
             <h2>Build your own</h2>
-            <p>The repo includes the full Python kernel, adapters for OpenAI/Anthropic/Ollama/mock, MCP client/server wrappers, and sample configs.</p>
+            <p>The repo includes the full Python kernel, adapters for OpenAI, Anthropic, Ollama, and mock providers, MCP client and server wrappers, and sample configs. Fork it, swap in your own models, and see how far the separation of planning and execution can take you.</p>
             <a href="https://github.com/abster12/advisor-executor-strategy" target="_blank" class="btn btn-primary"><i class="fab fa-github"></i> Explore the Code</a>
         </section>
     </main>
